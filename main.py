@@ -41,13 +41,13 @@ REWINDING = 1
 STOPPED = 2
 
 motorPins = [
-    Pin(16, Pin.out),  # D0
-    Pin(5, Pin.out),  # D1
-    Pin(4, Pin.out),  # D2
-    Pin(14, Pin.out)  # D5
+    Pin(14, Pin.OUT),  # D5
+    Pin(12, Pin.OUT),  # D6
+    Pin(13, Pin.OUT),  # D7
+    Pin(15, Pin.OUT)  # D8
 ]
 
-MODE_PIN = Pin(13, Pin.out)  # D7
+MODE_PIN = Pin(13, Pin.IN)  # D7
 
 STEPPER_SEQUENCE = [
     [1, 0, 0, 1],
@@ -93,9 +93,9 @@ def do_step(current_step):
     # apply a single step of the stepper motor on its pins.
     for i in NUM_PINS:
         if current_step[i] is 1:
-            Pin(motorPins[i], Pin.HIGH)
-        else
-            Pin(motorPins[i], Pin.LOW )
+            motorPins[i].value(1)
+        else:
+            motorPins[i].value(0)
 
 
 def setup():
@@ -118,16 +118,13 @@ def setup_timer():
 
 
 def setup_gpio():
-    for i in NUM_PINS:
-        Pin(motorPins[i], Pin.OUT)
-    all_pins_off()
-    button = Pin(MODE_PIN, Pin.IN)
-    button.irq(trigger=Pin.IRQ_FALLING, handler=toggle_mode)
+    #all_pins_off()
+    MODE_PIN.irq(trigger=Pin.IRQ_FALLING, handler=toggle_mode)
 
 
-def all_pins_off():
+def all_pins_off(pin):
     for i in NUM_PINS:
-        Pin(motorPins[i], Pin.low())
+        pin.value(0)
 
 
 def toggle_mode():
