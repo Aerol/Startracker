@@ -47,7 +47,7 @@ motorPins = [
     Pin(15, Pin.OUT)  # D8
 ]
 
-MODE_PIN = Pin(13, Pin.IN)  # D7
+MODE_PIN = Pin(5, Pin.IN)  # D7
 
 STEPPER_SEQUENCE = [
     [1, 0, 0, 1],
@@ -66,12 +66,12 @@ total_seconds = 0.0
 totalsteps = 0
 step_interval_s = 0.001
 current_step = 0
-next = 0
+nxt = 0
 now = 0
 last_toggle = 0
 current_mode = NORMAL
 autostop = True
-
+timer0 = Timer(0, mode=Timer.PERIODIC, )
 
 def ypt(ts):
     # Bolt insertion rate in cm/s: y'(t)
@@ -86,8 +86,44 @@ def step_motor():
     the step interval based on the current tangent error,
     and sets a new timer.
     """
-    pass
+    if current_mode == NORMAL:
+        step_interval_s = 1.0/(ROTATIONS_PER_CM*ypt(total_seconds)*2*DOUBLESTEPS_PER_ROTATION)
+        step_delta = 1
+        step_num %= len(STEPPER_SEQUENCE)
+        return
+    elif current_mode == REWINDING:
+        step_interval_s = 0.0025
+        step_delta = -2 
+        if(step_num<0):
+            step_num += len(STEPPER_SEQUENCE)
+        return
+    elif current_mode == STOPPED:
+        step_interval_s = 0.2
+        return
+    else:
+        print("we should never be here")
 
+    if current_mode != STOPPED:
+        total_seconds += step_interval_s
+        current_step = STEPPER_SEQUENCE[step_num]
+        do_step(current_step)
+        step_num += step_delta
+        totalsteps += step_delta
+
+    now = time.now()
+    nxt = now+step_interval_s*CYCLES_PER_SECOND-(now-nxt);
+    timer = Timer(2)
+    timer.init(mode=Timer.ONE_SHOT, period=nxt) 
+
+def _debounce(pin):
+    cur_value = pin.value()
+    active = 0
+    while active < 20:
+        if pin.value() != cur_value:
+            active += 1
+        else:
+            active = 0
+        time.sleep(1.0)
 
 def do_step(current_step):
     # apply a single step of the stepper motor on its pins.
@@ -133,6 +169,8 @@ def toggle_mode():
     # Need to find replacement for ESP.getCycleCount();
     #if ESP.getCycleCount() - last_toggle < 0.2*CYCLES_PER_SECOND:
     #    return 
+    _debounce(MODE_PIN)
+
     if current_mode is REWINDING:
         print("STOPPING")
         current_mode = STOPPED
