@@ -159,7 +159,7 @@ def setup_gpio():
 
 
 def all_pins_off(pin):
-    for i in NUM_PINS:
+    for i in len(motorPins):
         pin.value(0)
 
 
@@ -191,5 +191,10 @@ def toggle_mode():
     pass
 
 
-def loop():
-    pass
+while True:
+    if current_mode == REWINDING:
+        if(totalsteps<1 and autostop):
+            print("Ending the rewind and stopping")
+            current_mode = STOPPED
+            all_pins_off()
+            total_seconds = 0.0
