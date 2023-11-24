@@ -71,7 +71,6 @@ now = 0
 last_toggle = 0
 current_mode = NORMAL
 autostop = True
-timer0 = Timer(0, mode=Timer.PERIODIC, )
 
 def ypt(ts):
     # Bolt insertion rate in cm/s: y'(t)
@@ -138,8 +137,7 @@ def setup():
     setup_gpio()
     setup_timer()
     
-    buttonUp = Pin(MODE_PIN)
-    if not buttonUp:
+    if not MODE_PIN.value():
         print("Manual REWIND")
         autostop = False
         current_mode = REWINDING
@@ -154,8 +152,8 @@ def setup_timer():
 
 
 def setup_gpio():
-    #all_pins_off()
-    MODE_PIN.irq(trigger=Pin.IRQ_FALLING, handler=toggle_mode)
+    all_pins_off()
+    MODE_PIN.irq(trigger=Pin.IRQ_LOW_LEVEL, handler=toggle_mode)
 
 
 def all_pins_off(pin):
