@@ -47,7 +47,7 @@ motorPins = [
     Pin(15, Pin.OUT)  # D8
 ]
 
-MODE_PIN = Pin(5, Pin.IN)  # D7
+MODE_PIN = Pin(5, Pin.IN)  # D1
 
 STEPPER_SEQUENCE = [
     [1, 0, 0, 1],
@@ -71,6 +71,7 @@ now = 0
 last_toggle = 0
 current_mode = NORMAL
 autostop = True
+timer = Timer(1)
 
 def ypt(ts):
     # Bolt insertion rate in cm/s: y'(t)
@@ -78,27 +79,33 @@ def ypt(ts):
     return LENGTH_CM * RADS_PER_SEC/math.pow(math.cos(THETAO + RADS_PER_SEC * ts), 2)
 
 
-def step_motor():
+def step_motor(pin):
     """
     This is the callback function that gets called when te timer
     expires. It moves the motor, updates lists, recomputes
     the step interval based on the current tangent error,
     and sets a new timer.
     """
+    global total_seconds
+    global step_num 
+    global step_delta
+    global totalsteps
+    global nxt
+    global now
     if current_mode == NORMAL:
         step_interval_s = 1.0/(ROTATIONS_PER_CM*ypt(total_seconds)*2*DOUBLESTEPS_PER_ROTATION)
         step_delta = 1
         step_num %= len(STEPPER_SEQUENCE)
-        return
+        #return
     elif current_mode == REWINDING:
         step_interval_s = 0.0025
         step_delta = -2 
         if(step_num<0):
             step_num += len(STEPPER_SEQUENCE)
-        return
+        #return
     elif current_mode == STOPPED:
         step_interval_s = 0.2
-        return
+        #return
     else:
         print("we should never be here")
 
@@ -108,11 +115,9 @@ def step_motor():
         do_step(current_step)
         step_num += step_delta
         totalsteps += step_delta
-
-    now = time.now()
+    now = time.time()
     nxt = now+step_interval_s*CYCLES_PER_SECOND-(now-nxt);
-    timer = Timer(2)
-    timer.init(mode=Timer.ONE_SHOT, period=nxt) 
+    timer.init(mode=Timer.ONE_SHOT, period=4, callback=step_motor) 
 
 def _debounce(pin):
     cur_value = pin.value()
@@ -126,7 +131,7 @@ def _debounce(pin):
 
 def do_step(current_step):
     # apply a single step of the stepper motor on its pins.
-    for i in NUM_PINS:
+    for i in range(NUM_PINS):
         if current_step[i] is 1:
             motorPins[i].value(1)
         else:
@@ -137,37 +142,40 @@ def setup():
     setup_gpio()
     setup_timer()
     
-    if not MODE_PIN.value():
+    if MODE_PIN.value():
         print("Manual REWIND")
         autostop = False
         current_mode = REWINDING
 
 
 def setup_timer():
-    machine.disable_irq()
-    timer = Timer(2)
-    timer.init(freq=1000)
-    timer.callback(lambda t:step_motor())
-    machine.enable_irq()
+    print("setting up timer")
+    irq = machine.disable_irq()
+    timer.init(freq=1000, callback=step_motor)
+    #timer.callback(lambda t:step_motor())
+    machine.enable_irq(irq)
 
 
 def setup_gpio():
+    print("setup_gpio() called")
     all_pins_off()
-    MODE_PIN.irq(trigger=Pin.IRQ_LOW_LEVEL, handler=toggle_mode)
+    print("setting button press callback to toggle_mode")
+    MODE_PIN.irq(trigger=Pin.IRQ_FALLING, handler=toggle_mode)
 
 
-def all_pins_off(pin):
-    for i in len(motorPins):
-        pin.value(0)
+def all_pins_off():
+    for i in range(len(motorPins)):
+        motorPins[i].value(0)
 
 
-def toggle_mode():
+def toggle_mode(pin):
     # We have several modes that we can toggle between with a button,
     # NORMAL, REWIND, and STOPPED.
     # Need to find replacement for ESP.getCycleCount();
     #if ESP.getCycleCount() - last_toggle < 0.2*CYCLES_PER_SECOND:
     #    return 
     _debounce(MODE_PIN)
+    print("got a button press")
 
     if current_mode is REWINDING:
         print("STOPPING")
@@ -188,8 +196,9 @@ def toggle_mode():
         
     pass
 
-
+setup()
 while True:
+    time.sleep(0.05)
     if current_mode == REWINDING:
         if(totalsteps<1 and autostop):
             print("Ending the rewind and stopping")
