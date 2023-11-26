@@ -47,7 +47,8 @@ motorPins = [
     Pin(15, Pin.OUT)  # D8
 ]
 
-MODE_PIN = Pin(5, Pin.IN)  # D1
+MODE_PIN = Pin(5, mode=Pin.IN)  # D1
+MODE_PIN.irq(trigger=Pin.IRQ_FALLING, handler=lambda t:print(t))
 
 STEPPER_SEQUENCE = [
     [1, 0, 0, 1],
@@ -92,6 +93,10 @@ def step_motor(pin):
     global totalsteps
     global nxt
     global now
+    global current_mode
+    global NORMAL
+    global REWINDING
+    global STOPPED
     if current_mode == NORMAL:
         step_interval_s = 1.0/(ROTATIONS_PER_CM*ypt(total_seconds)*2*DOUBLESTEPS_PER_ROTATION)
         step_delta = 1
@@ -99,9 +104,9 @@ def step_motor(pin):
         #return
     elif current_mode == REWINDING:
         step_interval_s = 0.0025
-        step_delta = -2 
+        step_delta = -2
         if(step_num<0):
-            step_num += len(STEPPER_SEQUENCE)
+            step_num %= len(STEPPER_SEQUENCE)
         #return
     elif current_mode == STOPPED:
         step_interval_s = 0.2
@@ -115,9 +120,10 @@ def step_motor(pin):
         do_step(current_step)
         step_num += step_delta
         totalsteps += step_delta
-    now = time.time()
+    now = time.ticks_cpu()
     nxt = now+step_interval_s*CYCLES_PER_SECOND-(now-nxt);
-    timer.init(mode=Timer.ONE_SHOT, period=4, callback=step_motor) 
+    #nxt =int(math.modf(nxt)[0])
+    timer.init(mode=Timer.ONE_SHOT, period=1, callback=step_motor) 
 
 def _debounce(pin):
     cur_value = pin.value()
@@ -132,7 +138,7 @@ def _debounce(pin):
 def do_step(current_step):
     # apply a single step of the stepper motor on its pins.
     for i in range(NUM_PINS):
-        if current_step[i] is 1:
+        if current_step[i] == 1:
             motorPins[i].value(1)
         else:
             motorPins[i].value(0)
@@ -143,6 +149,7 @@ def setup():
     setup_timer()
     
     if MODE_PIN.value():
+        print(MODE_PIN.value())
         print("Manual REWIND")
         autostop = False
         current_mode = REWINDING
@@ -174,10 +181,19 @@ def toggle_mode(pin):
     # Need to find replacement for ESP.getCycleCount();
     #if ESP.getCycleCount() - last_toggle < 0.2*CYCLES_PER_SECOND:
     #    return 
-    _debounce(MODE_PIN)
+    #_debounce(MODE_PIN)
     print("got a button press")
+    print(NORMAL)
+    print(REWINDING)
+    print(STOPPED)
+    global current_mode
+    global autostop
+    global last_toggle
+    global step_num
+    global total_seconds
+    global totalsteps
 
-    if current_mode is REWINDING:
+    if current_mode == REWINDING:
         print("STOPPING")
         current_mode = STOPPED
         all_pins_off()
@@ -186,7 +202,7 @@ def toggle_mode(pin):
             total_seconds = 0
             totalsteps = 0
             autostop = True
-    elif current_mode is NORMAL:
+    elif current_mode == NORMAL:
         print("REWINDING")
         current_mode = REWINDING
     else:
